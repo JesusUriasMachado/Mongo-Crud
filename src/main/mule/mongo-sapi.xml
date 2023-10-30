@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo"
+	xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mongo/current/mule-mongo.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<tls:context name="TLS_Context" doc:name="TLS Context" doc:id="7d96d44b-0825-4d30-a66a-8be217d940c5" >
+		<tls:key-store type="jks" path="${secure::key.path}" alias="${secure::key.alias}" keyPassword="${secure::key.pass}" password="${secure::key.pass}" />
+	</tls:context>
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="920cf0d4-89a6-44a0-b67a-c4b0feb32d19" >
+		<http:listener-connection protocol="HTTPS" host="0.0.0.0" port="${secure::http.port}" tlsContext="TLS_Context" />
+	</http:listener-config>
+	<flow name="GETDOCS" doc:id="39c94034-7e95-4d21-8d9f-561504035a92" >
+		<http:listener doc:name="Get All" doc:id="f75143a2-4bb7-4444-8812-5e58abbda52d" config-ref="HTTP_Listener_config" path="/api/analytics/{collection}" allowedMethods="GET"/>
+		<mongo:find-documents doc:name="Find documents" doc:id="5f4086fb-7120-4c9d-be97-c43918586b13" config-ref="MongoDB_Config" collectionName="#[attributes.uriParams.collection]" fields=",">
+		</mongo:find-documents>
+		<ee:transform doc:name="Transform Message" doc:id="b49f2898-51ad-477f-bff6-f8b028ce6417" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	size : sizeOf(payload),
+	data : payload
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
