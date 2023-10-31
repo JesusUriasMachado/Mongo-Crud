@@ -1,0 +1,36 @@
+[{
+  "id": 1,
+  "first_name": "Kiley",
+  "last_name": "Python",
+  "email": "kpython0@nifty.com",
+  "gender": "Male",
+  "ip_address": "253.1.235.155"
+}, {
+  "id": 2,
+  "first_name": "Tarrance",
+  "last_name": "Throughton",
+  "email": "tthroughton1@studiopress.com",
+  "gender": "Male",
+  "ip_address": "66.11.70.101"
+}, {
+  "id": 3,
+  "first_name": "Pippa",
+  "last_name": "Abells",
+  "email": "pabells2@i2i.jp",
+  "gender": "Female",
+  "ip_address": "171.251.227.208"
+}, {
+  "id": 4,
+  "first_name": "Lebbie",
+  "last_name": "Bunner",
+  "email": "lbunner3@alexa.com",
+  "gender": "Female",
+  "ip_address": "146.224.117.25"
+}, {
+  "id": 5,
+  "first_name": "Rriocard",
+  "last_name": "MacKibbon",
+  "email": "rmackibbon4@themeforest.net",
+  "gender": "Male",
+  "ip_address": "205.118.162.226"
+}]

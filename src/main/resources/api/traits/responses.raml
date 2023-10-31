@@ -1,0 +1,30 @@
+#%RAML 1.0 Trait
+responses:
+  400:
+    description: BAD REQUEST
+    body:
+      application/json:
+        example: {
+          message : "Bad Request"
+        }
+  403:
+    description: FORBIDEN
+    body:
+      application/json:
+        example: {
+          message : "Forbidden"
+        }
+  404:
+    description: Not Found
+    body:
+      application/json:
+        example: {
+          message : "Not Found"
+        }
+  500:
+    description: Server Error
+    body:
+      application/json:
+        example: {
+          message : "Server Error"
+        }

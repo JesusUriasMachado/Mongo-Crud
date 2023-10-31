@@ -1,0 +1,81 @@
+#%RAML 1.0
+title: mongo-sapi
+description: Basic Crud for Mongo
+baseUri: http://{host}:{port}/api/
+protocols: [http]
+securitySchemes:
+  basic:
+    type: Basic Authentication
+securedBy: [basic]
+
+traits:
+  hasHeaders: !include traits/hasHeaders.raml
+  responses: !include traits/responses.raml
+
+/mongo/{collection}:
+  description: Panel for doing things at mongo
+  displayName: Mongo Panel
+  get:
+    is:
+      - hasHeaders
+      - responses
+    description: Used to get all docs
+    displayName: Get Docs
+    responses:
+      200:
+        body:
+          application/json:
+            example: !include examples/get.json
+  post:
+    is:
+      - hasHeaders
+      - responses
+    displayName: Create Docs
+    description: used to create docs at the specified collection
+    body:
+      application/json:
+        example: !include dataType/post.json
+    responses:
+      201:
+        body:
+          application/json:
+            example: !include examples/post.json
+  /{id}:
+    displayName:  Do To One
+    description: Do things to a single doc at the collection
+    get:
+      is:
+        - hasHeaders
+        - responses
+      displayName: Get One
+      description: Get one doc at the collection
+      responses:
+        200:
+          body:
+            application/json:
+              example: !include examples/getOne.json
+    patch:
+      is:
+        - hasHeaders
+        - responses
+      displayName: Patch One
+      description: Patch one doc at the collection
+      body:
+        application/json:
+          example: !include dataType/patch.json
+      responses:
+        201:
+          body:
+            application/json:
+              example: !include examples/patch.json
+    delete:
+      is:
+        - hasHeaders
+        - responses
+      displayName: Delete One
+      description: Delete one doc at the collection
+      responses:
+        200:
+          body:
+            application/json:
+              example: !include examples/delete.json

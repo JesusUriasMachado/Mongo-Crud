@@ -1,32 +1,266 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo"
-	xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+<mule xmlns:mongo="http://www.mulesoft.org/schema/mule/mongo" xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
 http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
-http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mongo/current/mule-mongo.xsd
-http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
-	<tls:context name="TLS_Context" doc:name="TLS Context" doc:id="7d96d44b-0825-4d30-a66a-8be217d940c5" >
+http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mongo/current/mule-mongo.xsd">
+    <apikit:config name="mongo-sapi-config" api="mongo-sapi.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <tls:context name="TLS_Context" doc:name="TLS Context" doc:id="af9af36d-6b6a-4892-b2ca-77161b31dd80" >
 		<tls:key-store type="jks" path="${secure::key.path}" alias="${secure::key.alias}" keyPassword="${secure::key.pass}" password="${secure::key.pass}" />
 	</tls:context>
-	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="920cf0d4-89a6-44a0-b67a-c4b0feb32d19" >
+	<http:listener-config name="HTTPS_Listener_config" doc:name="HTTP Listener config" doc:id="ec104362-1dc8-44f0-81f3-bf74595084a3" >
 		<http:listener-connection protocol="HTTPS" host="0.0.0.0" port="${secure::http.port}" tlsContext="TLS_Context" />
 	</http:listener-config>
-	<flow name="GETDOCS" doc:id="39c94034-7e95-4d21-8d9f-561504035a92" >
-		<http:listener doc:name="Get All" doc:id="f75143a2-4bb7-4444-8812-5e58abbda52d" config-ref="HTTP_Listener_config" path="/api/analytics/{collection}" allowedMethods="GET"/>
-		<mongo:find-documents doc:name="Find documents" doc:id="5f4086fb-7120-4c9d-be97-c43918586b13" config-ref="MongoDB_Config" collectionName="#[attributes.uriParams.collection]" fields=",">
-		</mongo:find-documents>
-		<ee:transform doc:name="Transform Message" doc:id="b49f2898-51ad-477f-bff6-f8b028ce6417" >
+	<flow name="mongo-sapi-main">
+        <http:listener config-ref="HTTPS_Listener_config" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="mongo-sapi-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Bad request",
+	details: error.description
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Resource not found",
+	details: error.description
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[404]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="mongo-sapi-console">
+        <http:listener config-ref="HTTPS_Listener_config" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="mongo-sapi-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="delete:\mongo\(collection)\(id):mongo-sapi-config">
+        <set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="02977eee-fee9-4287-ae6a-53e6c2c02b9e" variableName="collection"/>
+		<mongo:remove-documents doc:name="Remove documents" doc:id="1a837d63-083d-410f-8edc-3c1702bd92eb" config-ref="MongoDB_Config" collectionName="#[vars.collection]">
+			<mongo:query ><![CDATA[#[["db." ++ vars.collection ++ ".remove({_id:ObjectId('" ++ attributes.uriParams.id ++ "')})]"]]]></mongo:query>
+		</mongo:remove-documents>
+		<ee:transform doc:name="Transform Message" doc:id="ced4605f-def8-43cf-9e52-10356187c20c" >
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<remove-variable doc:name="Remove Collection" doc:id="c5fe11a5-601e-4f30-92ba-1d5584735b13" variableName="collection"/>
+    </flow>
+    <flow name="patch:\mongo\(collection)\(id):application\json:mongo-sapi-config">
+        <ee:transform doc:name="Transform Message">
+            <ee:variables>
+                <ee:set-variable variableName="collection">attributes.uriParams.'collection'</ee:set-variable>
+                <ee:set-variable variableName="id">attributes.uriParams.'id'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Transform Message">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  id: "Documento Actualizado"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\mongo\(collection)\(id):mongo-sapi-config">
+		<ee:transform doc:name="Transform Message" doc:id="1781db41-d5f5-484f-a8cd-463b48868684" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    </flow>
+    <flow name="get:\mongo\(collection):mongo-sapi-config">
+		<set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="b822edc8-4c45-4da9-abac-01cc072b8882" variableName="collection"/>
+		<mongo:collection-exists collectionName="#[vars.collection]" doc:name="Collection exists" doc:id="8d791881-d811-4ba1-9d8f-c32be8825b17" config-ref="MongoDB_Config"/>
+		<choice doc:name="Choice" doc:id="0bed0bcb-2ee1-43ae-a290-89408a977645" >
+			<when expression="#[payload == true]">
+				<mongo:find-documents doc:name="Find documents" doc:id="49a84a00-51c4-4ad1-ac7f-691b91309b80" config-ref="MongoDB_Config" collectionName="#[vars.collection]" fields=","/>
+				<ee:transform doc:name="Transform Message" doc:id="2bcf0e8b-7c7e-425e-bb6c-ceadf6fd8488" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
 ---
 {
 	size : sizeOf(payload),
 	data : payload
 }]]></ee:set-payload>
-			</ee:message>
-		</ee:transform>
-	</flow>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<flow-ref doc:name="Flow Reference" doc:id="97dcb6c9-c06a-4925-96f0-e894b74e859b" name="collectionNotFound"/>
+			</otherwise>
+		</choice>
+		<remove-variable doc:name="Remove Variable" doc:id="e76b5fe9-0860-4ded-b191-dd2d4433a15f" variableName="collection"/>
+    </flow>
+    <flow name="post:\mongo\(collection):application\json:mongo-sapi-config">
+		<choice doc:name="Choice" doc:id="9d68fc99-d847-4220-97ea-41fc9627036d" >
+			<when expression="#[sizeOf(payload) == 0]">
+				<raise-error doc:name="Raise error" doc:id="bde95031-7201-4154-8ffa-c8f4a5f0bf49" type="VALIDATIONS:NULL" description="Used when the doc is empty"/>
+			</when>
+			<otherwise >
+				<set-variable value="#[payload]" doc:name="Set Doc" doc:id="0d3d7195-f01c-4041-bd83-900435e267a8" variableName="doc" />
+				<set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="a4f7651a-6376-444e-a6e1-519b0a2daf18" variableName="collection" />
+			</otherwise>
+		</choice>
+		<mongo:collection-exists collectionName="#[vars.collection]" doc:name="Collection exists" doc:id="0edd1782-e279-4363-a585-e41f628cfd66" config-ref="MongoDB_Config"/>
+		<choice doc:name="Choice" doc:id="8347fcd9-e91a-4539-a9bd-5904f2d191fa" >
+			<when expression="#[payload == true]">
+				<mongo:insert-document collectionName="#[vars.collection]" doc:name="Insert document" doc:id="436bb730-d12e-4c16-bd70-d539b7ee19a1" config-ref="MongoDB_Config">
+					<mongo:document ><![CDATA[#[vars.doc]]]></mongo:document>
+				</mongo:insert-document>
+				<ee:transform doc:name="Transform Message" doc:id="8056e591-63a0-446e-8b21-774ba157791e" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="Flow Reference" doc:id="fa07ba6c-d48e-4495-8a16-779eb913baaa" name="collectionNotFound"/>
+			</otherwise>
+		</choice>
+		<remove-variable doc:name="Remove Doc" doc:id="b54a16e5-885e-4b9b-849e-b74500f9c4a1" variableName="doc"/>
+		<remove-variable doc:name="Remove Collection Name" doc:id="2c106150-b3e2-4057-a573-ed3e47879a1e" variableName="collection"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="9755fd80-647b-4151-9bc6-b260d22471b6" type="VALIDATIONS:NULL">
+				<ee:transform doc:name="Transform Message" doc:id="4bfd3897-9ed9-4d36-a4d6-8868f4c9b9e1" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "El documento no puede estar vacio"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="400" doc:name="Set Status" doc:id="ca8ccd7c-1676-4441-a55f-ae073666b7da" variableName="httpStatus"/>
+			</on-error-propagate>
+		</error-handler>
+    </flow>
+	<sub-flow name="collectionNotFound" doc:id="3a741477-bdd5-44d9-9da0-380067426f69" >
+		<mongo:list-collections doc:name="List collections" doc:id="4f19151e-6a2d-4574-baab-75a11a02c80d" config-ref="MongoDB_Config"/>
+		<ee:transform doc:name="Transform Message" doc:id="124109b8-b50d-4ed7-8209-906f5626c2c5">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Esta coleccion no existe.",
+	availableCollections : payload
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+		<set-variable value="404" doc:name="Set Status" doc:id="8877fbf8-74da-4497-8e92-5bae88b5a624" variableName="httpStatus" />
+	</sub-flow>
 </mule>
