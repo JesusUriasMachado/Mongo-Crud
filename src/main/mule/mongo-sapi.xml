@@ -137,7 +137,6 @@ output application/json
     <flow name="delete:\mongo\(collection)\(id):mongo-sapi-config">
         <set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="02977eee-fee9-4287-ae6a-53e6c2c02b9e" variableName="collection"/>
 		<mongo:remove-documents doc:name="Remove documents" doc:id="1a837d63-083d-410f-8edc-3c1702bd92eb" config-ref="MongoDB_Config" collectionName="#[vars.collection]">
-			<mongo:query ><![CDATA[#[["db." ++ vars.collection ++ ".remove({_id:ObjectId('" ++ attributes.uriParams.id ++ "')})]"]]]></mongo:query>
 		</mongo:remove-documents>
 		<ee:transform doc:name="Transform Message" doc:id="ced4605f-def8-43cf-9e52-10356187c20c" >
 			<ee:message >
@@ -168,14 +167,94 @@ output application/json
         </ee:transform>
     </flow>
     <flow name="get:\mongo\(collection)\(id):mongo-sapi-config">
-		<ee:transform doc:name="Transform Message" doc:id="1781db41-d5f5-484f-a8cd-463b48868684" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
+		<set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="c36bd0d4-6667-4bbe-909b-29ab2b8bdb74" variableName="collection"/>
+		<set-variable value="#[attributes.uriParams.id]" doc:name="Set Id" doc:id="81c86a07-5c70-4383-b033-73536b0bb06d" variableName="id"/>
+		<mongo:collection-exists collectionName="#[vars.collection]" doc:name="Collection exists" doc:id="f6d4b82d-d616-4186-8c4f-b6fc3fbc04bc" config-ref="MongoDB_Config"/>
+		<choice doc:name="Choice" doc:id="6f98c562-f385-4900-98a4-ec5395f87ff0" >
+			<when expression="#[payload == true]">
+				<ee:transform doc:name="Set Query" doc:id="8adebaeb-8837-420d-ae7a-608781a31e30">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"_id": {
+		"\$oid": vars.id
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<try doc:name="Try" doc:id="cf325490-ffa5-4460-ac22-4f47177be0c8" >
+					<mongo:find-documents collectionName="#[vars.collection]" fields="," doc:name="Find documents" doc:id="9abb7141-563f-4672-8cb2-5a02ca115a2c" config-ref="MongoDB_Config">
+			<mongo:query><![CDATA[#[payload]]]></mongo:query>
+		</mongo:find-documents>
+					<error-handler>
+						<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="edab272e-09b7-4232-ac62-c1dd1275077a" >
+							<raise-error doc:name="Raise error" doc:id="b920bbb9-745f-41bb-baf2-c11b5524d1fe" type="CUSTOM:FIND"/>
+						</on-error-propagate>
+					</error-handler>
+				</try>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="Flow Reference" doc:id="667fd2a4-dea3-491f-a0e1-ce62ad15f3d3" name="collectionNotFound"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="3fae29e3-3b1b-4e1d-9860-73ad92988fab" >
+			<when expression="#[sizeOf(payload) &gt; 0]">
+				<ee:transform doc:name="Docs Found" doc:id="ed1a3a16-3458-4cbd-b52a-045c0e6fda07">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Docs Not Found" doc:id="b869ef85-bd99-4edd-bf81-fbf46ef028a1" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "No se encontraron resultados."
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="404" doc:name="Set Status" doc:id="84db31c1-b846-48bd-b1ee-94f81ad066da" variableName="httpStatus"/>
+			</otherwise>
+		</choice>
+		<remove-variable doc:name="Remove Id" doc:id="bfe0941c-eb0b-4f7b-8175-e7c48b29523a" variableName="id"/>
+		<remove-variable doc:name="Remove Collection" doc:id="a9f759c6-a91d-457a-b322-8c0ad35de51a" variableName="collection"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="c2a56b89-375f-4b55-b366-1064b2d86064" type="CUSTOM:FIND">
+				<ee:transform doc:name="Transform Message" doc:id="a0ef43b3-ed36-483e-8e39-62d559d2a3f9">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Ocurrio un error al obtener el documento.",
+	details : error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="404" doc:name="Set Status" doc:id="775731ef-9e5e-4b14-a8c8-c7fb00869969" variableName="httpStatus" />
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="b332cb89-17ca-4ec6-a230-df4b709858d4" >
+				<ee:transform doc:name="Transform Message" doc:id="76074695-e92f-4578-99ba-e8c07d67cdab" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Ocurrio un error desconocido.",
+	details : error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
     </flow>
     <flow name="get:\mongo\(collection):mongo-sapi-config">
 		<set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="b822edc8-4c45-4da9-abac-01cc072b8882" variableName="collection"/>
@@ -204,7 +283,7 @@ output application/json
     <flow name="post:\mongo\(collection):application\json:mongo-sapi-config">
 		<choice doc:name="Choice" doc:id="9d68fc99-d847-4220-97ea-41fc9627036d" >
 			<when expression="#[sizeOf(payload) == 0]">
-				<raise-error doc:name="Raise error" doc:id="bde95031-7201-4154-8ffa-c8f4a5f0bf49" type="VALIDATIONS:NULL" description="Used when the doc is empty"/>
+				<raise-error doc:name="Raise error" doc:id="bde95031-7201-4154-8ffa-c8f4a5f0bf49" type="VALIDATIONS:NULL"/>
 			</when>
 			<otherwise >
 				<set-variable value="#[payload]" doc:name="Set Doc" doc:id="0d3d7195-f01c-4041-bd83-900435e267a8" variableName="doc" />
