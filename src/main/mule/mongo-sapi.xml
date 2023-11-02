@@ -136,17 +136,94 @@ output application/json
     </flow>
     <flow name="delete:\mongo\(collection)\(id):mongo-sapi-config">
         <set-variable value="#[attributes.uriParams.collection]" doc:name="Set Collection" doc:id="02977eee-fee9-4287-ae6a-53e6c2c02b9e" variableName="collection"/>
-		<mongo:remove-documents doc:name="Remove documents" doc:id="1a837d63-083d-410f-8edc-3c1702bd92eb" config-ref="MongoDB_Config" collectionName="#[vars.collection]">
-		</mongo:remove-documents>
-		<ee:transform doc:name="Transform Message" doc:id="ced4605f-def8-43cf-9e52-10356187c20c" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
+		<set-variable value="#[attributes.uriParams.id]" doc:name="Set Id" doc:id="0a1049a9-d52e-4660-b3a1-faf82c023b0d" variableName="id"/>
+		<mongo:collection-exists collectionName="#[vars.collection]" doc:name="Collection exists" doc:id="aca0d05c-743c-40ab-b253-b7106b14c12f" config-ref="MongoDB_Config"/>
+		<choice doc:name="Choice" doc:id="86152dd5-c52a-4383-9029-9775b25cf38c" >
+			<when expression="#[payload == true]">
+				<ee:transform doc:name="Set Query" doc:id="47fa7aef-f16d-43ee-a134-878e6e36d587" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
 ---
-payload]]></ee:set-payload>
+{
+	"_id" : {
+		"\$oid" : vars.id
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<try doc:name="Try" doc:id="ff862ed6-40b0-4b25-a5a9-d923d65943f0" >
+					<mongo:remove-documents doc:name="Remove documents" doc:id="b4b72a33-2dec-419b-91a4-e0255d510935" config-ref="MongoDB_Config" collectionName="#[vars.collection]">
+						<mongo:query ><![CDATA[#[payload]]]></mongo:query>
+					</mongo:remove-documents>
+					<error-handler >
+						<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="6ea4b230-716b-4e05-9cda-80cf3b928d70" >
+							<raise-error doc:name="Raise error" doc:id="18bb8135-139a-4d7b-b492-3c9517a854b6" type="CUSTOM:FIND"/>
+						</on-error-propagate>
+					</error-handler>
+				</try>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="Flow Reference" doc:id="0758d416-4240-4382-b751-ea55eb55315d" name="collectionNotFound"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="bf698cf0-3136-4d30-8de5-dbd4c95abc84" >
+			<when expression="#[payload == 1]">
+				<ee:transform doc:name="Transform Message" doc:id="9ade4491-5561-4d4a-b299-2d3fedc60e1a">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Documento eliminado."
+}]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="0c47b4c7-6944-450f-86b8-61bffa4097b4" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "No se elimino ningun documento. Revise la informacion ingresada."
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<remove-variable doc:name="Remove Variable" doc:id="9832db12-b332-4746-a898-dac2c13bcb73" variableName="id"/>
 		<remove-variable doc:name="Remove Collection" doc:id="c5fe11a5-601e-4f30-92ba-1d5584735b13" variableName="collection"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="c35d5e78-af23-412c-8b12-8c692af54868" type="CUSTOM:FIND">
+				<ee:transform doc:name="Transform Message" doc:id="caf53f9b-8bb9-494f-a7b7-e8a32b0b1924" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Ocurrio un error al buscar el documento.",
+	details : error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="404" doc:name="Set Status" doc:id="ca0bb305-7f55-46d7-ac9a-d6e95a379af2" variableName="httpStatus"/>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="15a26b6b-4eef-4fe2-bf56-11aa4fa78f28" >
+				<ee:transform doc:name="Transform Message" doc:id="bb40467c-0ed2-481b-9e26-007389906957" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Ocurrio un error.",
+	details : error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
     </flow>
     <flow name="patch:\mongo\(collection)\(id):application\json:mongo-sapi-config">
         <ee:transform doc:name="Transform Message">
